@@ -1,6 +1,6 @@
 class YouTubeIt
   module Response
-    class VideoSearch < YouTubeIt::Record
+    class FeedSearch < YouTubeIt::Record
       # *String*:: Unique feed identifying url.
       attr_reader :feed_id 
       
@@ -15,9 +15,6 @@ class YouTubeIt
 
       # *Time*:: Date and time at which the feed was last updated
       attr_reader :updated_at
-
-      # *Array*:: Array of YouTubeIt::Model::Video records
-      attr_reader :videos
 
       def current_page
         ((offset - 1) / max_result_count) + 1
@@ -36,6 +33,15 @@ class YouTubeIt
       def total_pages
         (total_result_count / max_result_count.to_f).ceil
       end
+    end
+    class VideoSearch < FeedSearch
+      # *Array*:: Array of YouTubeIt::Model::Video records
+      attr_reader :videos
+    end
+
+    class CommentSearch < FeedSearch
+      # *Array*:: Array of YouTubeIt::Model::Comment records
+      attr_reader :comments
     end
   end
 end

@@ -41,12 +41,25 @@ class YouTubeIt
       def parse_content(content)
         doc = Nokogiri::XML(content.body)
         feed = doc.at("feed")
-
         comments = []
-        feed.css("entry").each do |entry|
-          comments << parse_entry(entry)
+        if feed
+          feed_id            = feed.at("id").text
+          updated_at         = Time.parse(feed.at("updated").text)
+          total_result_count = feed.at_xpath("openSearch:totalResults").text.to_i
+          offset             = feed.at_xpath("openSearch:startIndex").text.to_i
+          max_result_count   = feed.at_xpath("openSearch:itemsPerPage").text.to_i
+
+          feed.css("entry").each do |entry|
+            comments << parse_entry(entry)
+          end
         end
-        return comments
+        YouTubeIt::Response::CommentSearch.new(
+            :feed_id            => feed_id || nil,
+            :updated_at         => updated_at || nil,
+            :total_result_count => total_result_count || nil,
+            :offset             => offset || nil,
+            :max_result_count   => max_result_count || nil,
+            :comments             => comments)
       end
 
       protected

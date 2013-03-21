@@ -260,7 +260,7 @@ class TestClient < Test::Unit::TestCase
     assert_equal 201, res[:code]
     wait_for_api
     sleep(5)
-    comment1 = @client.comments(video.unique_id).first
+    comment1 = @client.comments(video.unique_id).comments.first
     assert_same_comment comment1, res[:comment]
     assert_equal "test comment", comment1.content
     assert_nil comment1.reply_to
@@ -269,7 +269,7 @@ class TestClient < Test::Unit::TestCase
     assert_equal 201, res[:code]
     wait_for_api
     sleep(5)
-    comment2 = @client.comments(video.unique_id).find {|c| c.content =~ /reply/}
+    comment2 = @client.comments(video.unique_id).comments.find {|c| c.content =~ /reply/}
     assert_same_comment comment2, res[:comment]
     assert_equal "reply comment", comment2.content
     assert_equal comment1.unique_id, comment2.reply_to
