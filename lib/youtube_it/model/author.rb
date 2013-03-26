@@ -8,6 +8,8 @@ class YouTubeIt
       attr_reader :uri
       
       attr_reader :thumbnail_url
+
+      attr_reader :user_id
     end
   end
 end

@@ -59,21 +59,22 @@ class YouTubeIt
             :total_result_count => total_result_count || nil,
             :offset             => offset || nil,
             :max_result_count   => max_result_count || nil,
-            :comments             => comments)
+            :comments           => comments)
       end
 
       protected
         def parse_entry(entry)
           author = YouTubeIt::Model::Author.new(
             :name => (entry.at("author/name").text rescue nil),
-            :uri  => (entry.at("author/uri").text rescue nil)
+            :uri  => (entry.at("author/uri").text rescue nil),
+            :user_id  => (entry.at_xpath("xmlns:author/yt:userId").text rescue nil)
           )
           YouTubeIt::Model::Comment.new(
             :author    => author,
             :content   => remove_bom(entry.at("content").text),
-            :published => entry.at("published").text,
+            :published => Time.parse(entry.at("published").text),
             :title     => remove_bom(entry.at("title").text),
-            :updated   => entry.at("updated").text,
+            :updated   => Time.parse(entry.at("updated").text),
             :url       => entry.at("id").text,
             :reply_to  => parse_reply(entry)
           )
