@@ -12,7 +12,8 @@ class TestClient < Test::Unit::TestCase
 
   def setup
     VCR.use_cassette("login with oauth2") do
-      @client = YouTubeIt::OAuth2Client.new(:client_access_token => "ya29.AHES6ZSRC7Fa5cyUa5G5-TJtt849dQ7OdSiB_kjBQg7S", :client_id => "68330730158.apps.googleusercontent.com", :client_secret => "Npj4rmtme7q6INPPQjpQFuCZ", :dev_key => "AI39si7WuZZxAkYebKSyrlJR7hIFktt6OoPycEOeOT_yHkZgr6QsGbZgmhKvbS4bsSAv0utgrfhNfXQBITu1wX_z3VsZE02giQ", :client_refresh_token => "1/ErxjeSs0RNMMGtaI-87grQf_o1iQKlx0JLwec1KIDH8")
+      @client = YouTubeIt::OAuth2Client.new(:client_access_token => "ya29.AHES6ZSRC7Fa5cyUa5G5-TJtt849dQ7OdSiB_kjBQg7S", 
+        :client_id => "68330730158.apps.googleusercontent.com", :client_secret => "Npj4rmtme7q6INPPQjpQFuCZ", :dev_key => "AI39si7WuZZxAkYebKSyrlJR7hIFktt6OoPycEOeOT_yHkZgr6QsGbZgmhKvbS4bsSAv0utgrfhNfXQBITu1wX_z3VsZE02giQ", :client_refresh_token => "1/ErxjeSs0RNMMGtaI-87grQf_o1iQKlx0JLwec1KIDH8")
       @client.refresh_access_token!
     end
     use_vcr
@@ -28,7 +29,6 @@ class TestClient < Test::Unit::TestCase
     assert_equal 25, response.max_result_count
     assert_equal 25, response.videos.length
     assert_equal 1, response.offset
-    assert(response.total_result_count > 100)
     assert_instance_of Time, response.updated_at
 
     response.videos.each { |v| assert_valid_video v }
@@ -41,7 +41,6 @@ class TestClient < Test::Unit::TestCase
     assert_equal 30, response.max_result_count
     assert_equal 30, response.videos.length
     assert_equal 15, response.offset
-    assert(response.total_result_count > 100)
     assert_instance_of Time, response.updated_at
 
     response.videos.each { |v| assert_valid_video v }
@@ -71,7 +70,6 @@ class TestClient < Test::Unit::TestCase
     assert_equal 25, response.max_result_count
     assert_equal 25, response.videos.length
     assert_equal 1, response.offset
-    assert(response.total_result_count > 100)
     assert_instance_of Time, response.updated_at
 
     response.videos.each { |v| assert_valid_video v }
@@ -190,6 +188,9 @@ class TestClient < Test::Unit::TestCase
     video = @client.video_by("http://gdata.youtube.com/feeds/videos/EkF4JD2rO3Q")
     assert_valid_video video
 
+    video = @client.video_by("http://www.youtube.com/watch?v=CBvFZV-jdHY")
+    assert_valid_video video
+
     video = @client.video_by("EkF4JD2rO3Q")
     assert_valid_video video
   end
@@ -215,10 +216,20 @@ class TestClient < Test::Unit::TestCase
     assert @client.video_delete(video.unique_id)
   end
 
+  def test_should_upload_and_partial_update_a_video
+    video  = @client.video_upload(File.open("test/test.mov"), OPTIONS)
+    assert_valid_video video
+    assert video.listed?
+    updated_video = @client.video_partial_update(video.unique_id, :list => 'denied', :embed => 'allowed')
+    assert updated_video.embeddable?
+    assert !updated_video.listed?
+    assert @client.video_delete(video.unique_id)
+  end
+
   def test_should_denied_comments
     video     = @client.video_upload(File.open("test/test.mov"), OPTIONS.merge(:comment => "denied"))
     assert_valid_video video
-    doc = open("http://www.youtube.com/watch?hl=en&v=#{video.unique_id}").read
+    doc = Excon.get("http://www.youtube.com/watch?hl=en&v=#{video.unique_id}").body
     assert !doc.match("<div id=\"comments-view\" class=\"comments-disabled\">").nil?, 'comments are not disabled'
     @client.video_delete(video.unique_id)
   end
@@ -226,7 +237,7 @@ class TestClient < Test::Unit::TestCase
   def test_should_denied_rate
     video  = @client.video_upload(File.open("test/test.mov"), OPTIONS.merge(:rate => "denied"))
     assert_valid_video video
-    doc = open("http://www.youtube.com/watch?hl=en&v=#{video.unique_id}").read
+    doc = Excon.get("http://www.youtube.com/watch?hl=en&v=#{video.unique_id}").body
     assert !doc.match("Ratings have been disabled for this video.").nil?, 'rating is not disabled'
     @client.video_delete(video.unique_id)
   end
@@ -286,6 +297,25 @@ class TestClient < Test::Unit::TestCase
     playlist = @client.add_playlist(:title => "youtube_it test!", :description => "test playlist")
     video = @client.add_video_to_playlist(playlist.playlist_id,"CE62FSEoY28")
     assert_equal video[:code].to_i, 201
+    assert @client.delete_video_from_playlist(playlist.playlist_id, video[:playlist_entry_id])
+    assert @client.delete_playlist(playlist.playlist_id)
+  end
+
+  def test_should_update_position_video_from_playlist
+    @client.playlists.each{|p| @client.delete_playlist(p.playlist_id)}
+    playlist = @client.add_playlist(:title => "youtube_it test!", :description => "test playlist")
+    video = @client.add_video_to_playlist(playlist.playlist_id, "CE62FSEoY28", 1)
+    assert_equal video[:code].to_i, 201
+    assert_equal YouTubeIt::Parser::VideosFeedParser.new(video[:body]).parse_videos.last.video_position.to_i, 1
+
+    video = @client.add_video_to_playlist(playlist.playlist_id, "CE62FSEoY28", 2)
+    assert_equal video[:code].to_i, 201
+    assert_equal YouTubeIt::Parser::VideosFeedParser.new(video[:body]).parse_videos.last.video_position.to_i, 2
+
+    video = @client.update_position_video_from_playlist(playlist.playlist_id, video[:playlist_entry_id], 2)
+    assert_equal video[:code].to_i, 200
+    assert_equal YouTubeIt::Parser::VideosFeedParser.new(video[:body]).parse_videos.last.video_position.to_i, 2
+
     assert @client.delete_video_from_playlist(playlist.playlist_id, video[:playlist_entry_id])
     assert @client.delete_playlist(playlist.playlist_id)
   end
@@ -408,6 +438,12 @@ class TestClient < Test::Unit::TestCase
     assert_nil profiles['some_non-existing_username']
   end
 
+  def test_should_get_multi_videos
+    videos = @client.videos ['82Wg7DYG9Jc', 'AByfaYcOm4A']
+    assert_operator videos, :has_key?, 'AByfaYcOm4A'
+    assert_equal videos['82Wg7DYG9Jc'].title, 'Billboard Hot 100 - Top 50 Singles (4/20/2013)'
+  end
+
   def test_should_add_and_delete_video_to_favorite
     video_id ="fFAnoEYFUQw"
     begin
@@ -470,7 +506,7 @@ class TestClient < Test::Unit::TestCase
     assert_equal 25, playlists_first_page.size
 
     playlists_second_page = @client.playlists('sbnation', {'start-index' => 26, 'max-results' => 25})
-    assert_equal 23, playlists_second_page.size
+    assert_equal 13, playlists_second_page.size
 
     all_playlists = playlists_first_page + playlists_second_page
     assert_equal all_playlists.size, all_playlists.uniq.size
@@ -478,7 +514,7 @@ class TestClient < Test::Unit::TestCase
 
   def test_all_playlists
     all_playlists = @client.all_playlists('sbnation')
-    assert_equal 48, all_playlists.size
+    assert_equal 38, all_playlists.size
   end
 
   def test_should_add_and_delete_video_from_watchlater
@@ -494,6 +530,16 @@ class TestClient < Test::Unit::TestCase
     @client.delete_video_from_watchlater(video[:watchlater_entry_id])
     wait_for_api
     assert @client.watchlater.videos.empty?
+  end
+
+  def test_batch_videos
+    videos = @client.videos(['oFT7vWyC1Ys', '1m3HDHZx4xM'])
+    assert_equal videos.count, 2
+  end
+
+  def test_get_all_videos
+    videos = @client.get_all_videos(:user => "enchufetv")
+    assert_equal videos.count, 199
   end
 
   private

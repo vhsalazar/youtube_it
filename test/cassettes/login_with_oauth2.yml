@@ -7,12 +7,12 @@ http_interactions:
       encoding: US-ASCII
       string: client_id=68330730158.apps.googleusercontent.com&client_secret=Npj4rmtme7q6INPPQjpQFuCZ&grant_type=refresh_token&refresh_token=1%2FErxjeSs0RNMMGtaI-87grQf_o1iQKlx0JLwec1KIDH8
     headers:
+      User-Agent:
+      - Faraday v0.8.7
       Content-Type:
       - application/x-www-form-urlencoded
       Accept:
       - ! '*/*'
-      User-Agent:
-      - Ruby
   response:
     status:
       code: 200
@@ -25,7 +25,7 @@ http_interactions:
       Expires:
       - Fri, 01 Jan 1990 00:00:00 GMT
       Date:
-      - Thu, 10 Jan 2013 16:49:57 GMT
+      - Thu, 27 Jun 2013 22:59:14 GMT
       Content-Type:
       - application/json
       X-Content-Type-Options:
@@ -40,8 +40,8 @@ http_interactions:
       - chunked
     body:
       encoding: US-ASCII
-      string: ! "{\n  \"access_token\" : \"ya29.AHES6ZRAb9HB4hO3VQ2oIJyPJfyhBXIP9VCQmgK_NND7p_Q\",\n
+      string: ! "{\n  \"access_token\" : \"ya29.AHES6ZSQ5njt5VZGfAo6FSDnptJM3Qiq1ixW7GUluiMcJ20\",\n
         \ \"token_type\" : \"Bearer\",\n  \"expires_in\" : 3600\n}"
-    http_version: !!null
-  recorded_at: Thu, 10 Jan 2013 16:49:57 GMT
-recorded_with: VCR 2.1.1
+    http_version: 
+  recorded_at: Thu, 27 Jun 2013 22:59:22 GMT
+recorded_with: VCR 2.5.0

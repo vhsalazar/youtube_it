@@ -354,7 +354,7 @@ class YouTubeIt
         end.reduce({},:merge)
       end
     end
-
+    
     class SubscriptionFeedParser < FeedParser #:nodoc:
 
       def parse_content(content)
@@ -493,6 +493,9 @@ class YouTubeIt
 
         rating_element = entry.at_xpath("gd:rating") rescue nil
         extended_rating_element = entry.at_xpath("yt:rating") rescue nil
+        unless entry.at_xpath("yt:position").nil?
+          video_position = entry.at_xpath("yt:position").text
+        end
 
         rating = nil
         if rating_element
@@ -558,7 +561,6 @@ class YouTubeIt
           :categories     => categories,
           :keywords       => keywords,
           :title          => title,
-          :html_content   => html_content,
           :author         => author,
           :description    => description,
           :duration       => duration,
@@ -574,11 +576,13 @@ class YouTubeIt
           :noembed        => noembed,
           :safe_search    => safe_search,
           :position       => position,
+          :video_position => video_position,
           :latitude       => latitude,
           :longitude      => longitude,
           :state          => state,
           :insight_uri    => insight_uri,
           :unique_id      => ytid,
+          :raw_content    => entry,
           :perm_private   => perm_private)
       end
 
@@ -599,6 +603,22 @@ class YouTubeIt
       end
     end
 
+    class BatchVideoFeedParser < VideoFeedParser
+      def parse_content(content)
+        Nokogiri::XML(content.body).xpath("//xmlns:entry").map do |entry|
+          entry.namespaces.each {|name, url| entry.document.root.add_namespace name, url }
+          username = entry.at_xpath('batch:id', entry.namespaces).text
+          result = catch(:result) do
+            case entry.at_xpath('batch:status', entry.namespaces)['code'].to_i
+            when 200...300 then parse_entry(entry)
+            else nil
+            end
+          end
+          { username => result }
+        end.reduce({},:merge)
+      end
+    end
+    
     class VideosFeedParser < VideoFeedParser #:nodoc:
 
     private

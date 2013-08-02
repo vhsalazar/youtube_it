@@ -37,4 +37,3 @@ class Test::Unit::TestCase
 end
 
 YouTubeIt.logger.level = Logger::ERROR
-

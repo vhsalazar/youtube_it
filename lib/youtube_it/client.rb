@@ -85,21 +85,32 @@ class YouTubeIt
     # YouTubeIt::Model::Video
     def video_by(video)
       vid = nil
-      vid_regex = /(?:youtube.com|youtu.be).*(?:\/|v=)([\w-]+)/
+      vid_regex = /(?:youtube.com|youtu.be).*(?:\/|v=)([a-zA-Z0-9_-]+)/
       if video =~ vid_regex
         vid = $1
       else
         vid = video
       end
-      video_id ="http://gdata.youtube.com/feeds/api/videos/#{vid}?v=2#{@dev_key ? '&key='+@dev_key : ''}"
+      video_id ="http://gdata.youtube.com/feeds/api/videos/#{vid}?v=#{YouTubeIt::API_VERSION}#{@dev_key ? '&key='+@dev_key : ''}"
       parser = YouTubeIt::Parser::VideoFeedParser.new(video_id)
       parser.parse
     end
 
     def video_by_user(user, vid)
-      video_id = "http://gdata.youtube.com/feeds/api/users/#{user}/uploads/#{vid}?v=2#{@dev_key ? '&key='+@dev_key : ''}"
+      video_id = "http://gdata.youtube.com/feeds/api/users/#{user}/uploads/#{vid}?v=#{YouTubeIt::API_VERSION}#{@dev_key ? '&key='+@dev_key : ''}"
       parser = YouTubeIt::Parser::VideoFeedParser.new(video_id)
       parser.parse
+    end
+
+    def get_all_videos(opts)
+      page = videos_by(opts.merge({:page => 1}))
+      videos = page.videos
+
+      while page.next_page && (page = videos_by(opts.merge({:page => page.next_page})) || true)
+       videos += page.videos
+      end
+
+      videos
     end
 
     def video_upload(data, opts = {})
@@ -108,6 +119,10 @@ class YouTubeIt
 
     def video_update(video_id, opts = {})
       client.update(video_id, opts)
+    end
+
+    def video_partial_update(video_id, opts = {})
+      client.partial_update(video_id, opts)
     end
 
     def captions_update(video_id, data, opts = {})
@@ -161,6 +176,10 @@ class YouTubeIt
       client.profiles(*users)
     end
 
+    def videos(*idxes)
+      client.videos(*idxes)
+    end
+
     # Fetches a user's activity feed.
     def activity(user = nil, opts = {})
       client.get_activity(user, opts)
@@ -210,8 +229,12 @@ class YouTubeIt
       client.update_playlist(playlist_id, options)
     end
 
-    def add_video_to_playlist(playlist_id, video_id)
-      client.add_video_to_playlist(playlist_id, video_id)
+    def add_video_to_playlist(playlist_id, video_id, position = nil)
+      client.add_video_to_playlist(playlist_id, video_id, position)
+    end
+
+    def update_position_video_from_playlist(playlist_id, playlist_entry_id, position = nil)
+      client.update_position_video_from_playlist(playlist_id, playlist_entry_id, position)
     end
 
     def delete_video_from_playlist(playlist_id, playlist_entry_id)
@@ -263,12 +286,12 @@ class YouTubeIt
       client.get_my_video(video_id)
     end
 
-    # Gets all videos 
+    # Gets all videos
     def my_videos(opts = {})
       client.get_my_videos(opts)
     end
 
-    # Gets all of the user's contacts/friends. 
+    # Gets all of the user's contacts/friends.
     def my_contacts(opts = {})
       client.get_my_contacts(opts)
     end
@@ -278,7 +301,7 @@ class YouTubeIt
       client.send_message(opts)
     end
 
-    # Gets all of the user's messages/inbox. 
+    # Gets all of the user's messages/inbox.
     def my_messages(opts = {})
       client.get_my_messages(opts)
     end
@@ -490,7 +513,7 @@ class YouTubeIt
       end
       @access_token
     end
-        
+
     def session_token_info
       response = Faraday.get("https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=#{@client_access_token}")
       {:code => response.status, :body => response.body }

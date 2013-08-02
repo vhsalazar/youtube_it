@@ -9,6 +9,7 @@ require 'oauth2'
 require 'faraday'
 
 class YouTubeIt
+  API_VERSION = "2.1"
 
   # Base error class for the extension
   class Error < RuntimeError
@@ -36,11 +37,11 @@ class YouTubeIt
   def self.adapter=(faraday_adapter)
     @adapter = faraday_adapter
   end
-  
+
   def self.adapter
     @adapter ||= Faraday.default_adapter
   end
-  
+
   # Gets mixed into the classes to provide the logger method
   module Logging #:nodoc:
 
@@ -83,6 +84,7 @@ end
   request/standard_search
   request/video_upload
   request/video_search
+  request/remote_file
   response/video_search
   middleware/faraday_authheader.rb
   middleware/faraday_oauth.rb

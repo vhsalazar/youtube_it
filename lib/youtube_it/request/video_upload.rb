@@ -45,6 +45,14 @@ class YouTubeIt
         @http_debugging = true
       end
 
+      def uri?(string)
+        uri = URI.parse(string)
+        %w( http https ).include?(uri.scheme)
+      rescue URI::BadURIError
+        false
+      rescue URI::InvalidURIError
+        false
+      end
       #
       # Upload "data" to youtube, where data is either an IO object or
       # raw file data.
@@ -71,7 +79,14 @@ class YouTubeIt
       # errors, containing the key and its error code.
       #
       # When the authentication credentials are incorrect, an AuthenticationError will be raised.
-      def upload(data, opts = {})
+      def upload(video_data, opts = {})
+
+        if video_data.is_a?(String) && uri?(video_data)
+          data = YouTubeIt::Upload::RemoteFile.new(video_data)
+        else
+          data = video_data
+        end
+
         @opts    = { :mime_type => 'video/mp4',
                      :title => '',
                      :description => '',
@@ -115,6 +130,15 @@ class YouTubeIt
         return YouTubeIt::Parser::VideoFeedParser.new(response.body).parse rescue nil
       end
 
+      # Partial updates to a video.
+      def partial_update(video_id, options)
+        update_body = partial_video_xml(options)
+        update_url  = "/feeds/api/users/default/uploads/%s" % video_id
+        update_header = { "Content-Type" => "application/xml" }
+        response    = yt_session.patch(update_url, update_body, update_header)
+
+        return YouTubeIt::Parser::VideoFeedParser.new(response.body).parse rescue nil
+      end
 
       def captions_update(video_id, data, options)
         @opts = {
@@ -136,7 +160,7 @@ class YouTubeIt
       # Fetches the currently authenticated user's contacts (i.e. friends).
       # When the authentication credentials are incorrect, an AuthenticationError will be raised.
       def get_my_contacts(opts)
-        contacts_url = "/feeds/api/users/default/contacts?v=2"
+        contacts_url = "/feeds/api/users/default/contacts?v=#{YouTubeIt::API_VERSION}"
         contacts_url << opts.collect { |k,p| [k,p].join '=' }.join('&')
         response = yt_session.get(contacts_url)
 
@@ -253,10 +277,39 @@ class YouTubeIt
         return YouTubeIt::Parser::ProfileFeedParser.new(response).parse
       end
 
+      def videos(idxes_to_fetch)
+        idxes_to_fetch.each_slice(50).map do |idxes|
+          post = Nokogiri::XML <<-BATCH
+              <feed
+                xmlns='http://www.w3.org/2005/Atom'
+                xmlns:media='http://search.yahoo.com/mrss/'
+                xmlns:batch='http://schemas.google.com/gdata/batch'
+                xmlns:yt='http://gdata.youtube.com/schemas/2007'>
+              </feed>
+            BATCH
+          idxes.each do |idx|
+            post.at('feed').add_child <<-ENTRY
+              <entry>
+                <batch:operation type="query" />
+                <id>/feeds/api/videos/#{idx}?v=#{YouTubeIt::API_VERSION}</id>
+                <batch:id>#{idx}</batch:id>
+              </entry>
+            ENTRY
+          end
+
+          post_body = StringIO.new('')
+          post.write_to( post_body, :indent => 2 )
+          post_body_io = StringIO.new(post_body.string)
+
+          response = yt_session.post('feeds/api/videos/batch', post_body_io )
+          YouTubeIt::Parser::BatchVideoFeedParser.new(response).parse
+        end.reduce({},:merge)
+      end
+
       def profiles(usernames_to_fetch)
         usernames_to_fetch.each_slice(50).map do |usernames|
           post = Nokogiri::XML <<-BATCH
-              <feed 
+              <feed
                 xmlns='http://www.w3.org/2005/Atom'
                 xmlns:media='http://search.yahoo.com/mrss/'
                 xmlns:batch='http://schemas.google.com/gdata/batch'
@@ -283,12 +336,12 @@ class YouTubeIt
       end
 
       def profile_url(user=nil)
-        "/feeds/api/users/%s?v=2" % (user || "default")
+        "/feeds/api/users/%s?v=#{YouTubeIt::API_VERSION}" % (user || "default")
       end
 
       # Return's a user's activity feed.
       def get_activity(user, opts)
-        activity_url = "/feeds/api/events?author=%s&v=2&" % (user ? user : "default")
+        activity_url = "/feeds/api/events?author=%s&v=#{YouTubeIt::API_VERSION}&" % (user ? user : "default")
         activity_url << opts.collect { |k,p| [k,p].join '=' }.join('&')
         response = yt_session.get(activity_url)
 
@@ -296,7 +349,7 @@ class YouTubeIt
       end
 
       def watchlater(user)
-        watchlater_url = "/feeds/api/users/%s/watch_later?v=2" % (user ? user : "default")
+        watchlater_url = "/feeds/api/users/%s/watch_later?v=#{YouTubeIt::API_VERSION}" % (user ? user : "default")
         response = yt_session.get(watchlater_url)
 
         return YouTubeIt::Parser::PlaylistFeedParser.new(response).parse
@@ -337,7 +390,7 @@ class YouTubeIt
       # max-results - maximum number of playlists to fetch, up to 25 (default is 25)
       def playlists(user, opts={})
         playlist_url = "/feeds/api/users/%s/playlists" % (user ? user : "default")
-        params = {'v' => 2}
+        params = {'v' => YouTubeIt::API_VERSION}
         params.merge!(opts) if opts
         playlist_url << "?#{params.collect { |k,v| [k,v].join '=' }.join('&')}"
         response = yt_session.get(playlist_url)
@@ -353,10 +406,18 @@ class YouTubeIt
         return YouTubeIt::Parser::PlaylistFeedParser.new(response).parse
       end
 
-      def add_video_to_playlist(playlist_id, video_id)
-        playlist_body = video_xml_for(:playlist => video_id)
+      def add_video_to_playlist(playlist_id, video_id, position)
+        playlist_body = video_xml_for(:playlist => video_id, :position => position)
         playlist_url  = "/feeds/api/playlists/%s" % playlist_id
         response      = yt_session.post(playlist_url, playlist_body)
+
+        return {:code => response.status, :body => response.body, :playlist_entry_id => get_entry_id(response.body)}
+      end
+
+      def update_position_video_from_playlist(playlist_id, playlist_entry_id, position)
+        playlist_body = video_xml_for(:position => position)
+        playlist_url = "/feeds/api/playlists/%s/%s" % [playlist_id, playlist_entry_id]
+        response      = yt_session.put(playlist_url, playlist_body)
 
         return {:code => response.status, :body => response.body, :playlist_entry_id => get_entry_id(response.body)}
       end
@@ -392,7 +453,7 @@ class YouTubeIt
       end
 
       def subscriptions(user)
-        subscription_url = "/feeds/api/users/%s/subscriptions?v=2" % (user ? user : "default")
+        subscription_url = "/feeds/api/users/%s/subscriptions?v=#{YouTubeIt::API_VERSION}" % (user ? user : "default")
         response         = yt_session.get(subscription_url)
 
         return YouTubeIt::Parser::SubscriptionFeedParser.new(response).parse
@@ -443,14 +504,14 @@ class YouTubeIt
       end
 
       def get_watch_history
-        watch_history_url = "/feeds/api/users/default/watch_history?v=2"
+        watch_history_url = "/feeds/api/users/default/watch_history?v=#{YouTubeIt::API_VERSION}"
         response = yt_session.get(watch_history_url)
 
         return YouTubeIt::Parser::VideosFeedParser.new(response.body).parse
       end
 
       def new_subscription_videos(user)
-        subscription_url = "/feeds/api/users/%s/newsubscriptionvideos?v=2" % (user ? user : "default")
+        subscription_url = "/feeds/api/users/%s/newsubscriptionvideos?v=#{YouTubeIt::API_VERSION}" % (user ? user : "default")
         response         = yt_session.get(subscription_url)
 
         return YouTubeIt::Parser::VideosFeedParser.new(response.body).parse
@@ -528,7 +589,7 @@ class YouTubeIt
         @auth_token ||= begin
           http  = Faraday.new("https://www.google.com", :ssl => {:verify => false})
           body = "Email=#{YouTubeIt.esc @user}&Passwd=#{YouTubeIt.esc @password}&service=youtube&source=#{YouTubeIt.esc @client_id}"
-          response = http.post("/youtube/accounts/ClientLogin", body, "Content-Type" => "application/x-www-form-urlencoded")
+          response = http.post("/accounts/ClientLogin", body, "Content-Type" => "application/x-www-form-urlencoded")
           raise ::AuthenticationError.new(response.body[/Error=(.+)/,1], response.status.to_i) if response.status.to_i != 200
           @auth_token = response.body[/Auth=(.+)/, 1]
         end
@@ -568,12 +629,59 @@ class YouTubeIt
         end.to_s
       end
 
+      def partial_video_xml(opts)
+        perms = [ :rate, :comment, :commentVote, :videoRespond, :list, :embed, :syndicate ]
+        delete_attrs = []
+        perms.each do |perm|
+          delete_attrs << "@action='#{perm}'" if opts[perm]
+        end
+
+        entry_attrs = {
+          :xmlns => "http://www.w3.org/2005/Atom",
+          'xmlns:media' => "http://search.yahoo.com/mrss/",
+          'xmlns:gd' => "http://schemas.google.com/g/2005",
+          'xmlns:yt' => "http://gdata.youtube.com/schemas/2007",
+          'xmlns:gml' => 'http://www.opengis.net/gml',
+          'xmlns:georss' => 'http://www.georss.org/georss' }
+
+        if !delete_attrs.empty?
+          entry_attrs['gd:fields'] = "yt:accessControl[#{delete_attrs.join(' or ')}]"
+        end
+
+        b = Builder::XmlMarkup.new
+        b.instruct!
+        b.entry(entry_attrs) do | m |
+
+          m.tag!("media:group") do | mg |
+            mg.tag!("media:title",        opts[:title], :type => "plain") if opts[:title]
+            mg.tag!("media:description",  opts[:description], :type => "plain") if opts[:description]
+            mg.tag!("media:keywords",     opts[:keywords].join(",")) if opts[:keywords]
+            mg.tag!('media:category',     opts[:category], :scheme => "http://gdata.youtube.com/schemas/2007/categories.cat") if opts[:category]
+            mg.tag!('yt:private') if opts[:private]
+            mg.tag!('media:category',     opts[:dev_tag], :scheme => "http://gdata.youtube.com/schemas/2007/developertags.cat") if opts[:dev_tag]
+          end
+
+          perms.each do |perm|
+            m.tag!("yt:accessControl", :action => perm.to_s, :permission => opts[perm]) if opts[perm]
+          end
+
+          if opts[:latitude] and opts[:longitude]
+            m.tag!("georss:where") do |geo|
+              geo.tag!("gml:Point") do |point|
+                point.tag!("gml:pos", opts.values_at(:latitude, :longitude).join(' '))
+              end
+            end
+          end
+        end.to_s
+      end
+
       def video_xml_for(data)
         b = Builder::XmlMarkup.new
         b.instruct!
         b.entry(:xmlns => "http://www.w3.org/2005/Atom", 'xmlns:yt' => "http://gdata.youtube.com/schemas/2007") do | m |
           m.id(data[:favorite] || data[:playlist] || data[:response]) if data[:favorite] || data[:playlist] || data[:response]
           m.tag!("yt:rating", :value => data[:rating]) if data[:rating]
+          m.tag!("yt:position", data[:position]) if data[:position]
           if(data[:subscribe])
             m.category(:scheme => "http://gdata.youtube.com/schemas/2007/subscriptiontypes.cat", :term => "channel")
             m.tag!("yt:username", data[:subscribe])
@@ -647,8 +755,7 @@ class YouTubeIt
           end
           builder.use FaradayMiddleware::YoutubeAuthHeader, authorization_headers
           builder.use Faraday::Response::YouTubeIt
-          builder.adapter YouTubeIt.adapter
-
+          builder.adapter Faraday.default_adapter
         end
       end
     end

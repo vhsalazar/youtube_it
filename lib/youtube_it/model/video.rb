@@ -100,6 +100,9 @@ class YouTubeIt
       # *String*:: Description of the video.
       attr_reader :html_content
 
+      # *String*:: Description of the video.
+      attr_reader :raw_content
+
       # YouTubeIt::Model::Author:: Information about the YouTube user who owns a piece of video content.
       attr_reader :author
 
@@ -141,19 +144,22 @@ class YouTubeIt
       attr_reader :latitude
       attr_reader :longitude
 
+      # Playlist position
+      attr_reader :video_position
+
       # Videos related to the current video.
       #
       # === Returns
       #   YouTubeIt::Response::VideoSearch
       def related
-        YouTubeIt::Parser::VideosFeedParser.new("http://gdata.youtube.com/feeds/api/videos/#{unique_id}/related?v=2").parse
+        YouTubeIt::Parser::VideosFeedParser.new("http://gdata.youtube.com/feeds/api/videos/#{unique_id}/related?v=#{YouTubeIt::API_VERSION}").parse
       end
       # Video responses to the current video.
       #
       # === Returns
       #   YouTubeIt::Response::VideoSearch
       def responses
-        YouTubeIt::Parser::VideosFeedParser.new("http://gdata.youtube.com/feeds/api/videos/#{unique_id}/responses?v=2").parse
+        YouTubeIt::Parser::VideosFeedParser.new("http://gdata.youtube.com/feeds/api/videos/#{unique_id}/responses?v=#{YouTubeIt::API_VERSION}").parse
       end
 
 
