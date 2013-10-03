@@ -443,7 +443,8 @@ class YouTubeIt
         if author_element
           author = YouTubeIt::Model::Author.new(
                      :name => author_element.at("name").text,
-                     :uri => author_element.at("uri").text)
+                     :uri => author_element.at("uri").text,
+                     :user_id => author_element.at_xpath("yt:userId").text)
         end
         media_group = entry.at_xpath('media:group')
 
