@@ -46,9 +46,8 @@ class YouTubeIt
           feed_id            = feed.at("id").text
           updated_at         = Time.parse(feed.at("updated").text)
           total_result_count = feed.at_xpath("openSearch:totalResults").text.to_i
-          offset             = feed.at_xpath("openSearch:startIndex").text.to_i
           max_result_count   = feed.at_xpath("openSearch:itemsPerPage").text.to_i
-
+          next_url           = feed.css("link[rel=next]").first.attributes["href"] if feed.css("link[rel=next]")
           feed.css("entry").each do |entry|
             comments << parse_entry(entry)
           end
@@ -57,9 +56,9 @@ class YouTubeIt
             :feed_id            => feed_id || nil,
             :updated_at         => updated_at || nil,
             :total_result_count => total_result_count || nil,
-            :offset             => offset || nil,
             :max_result_count   => max_result_count || nil,
-            :comments           => comments)
+            :comments           => comments,
+            :next_url           => next_url || nil)
       end
 
       protected

@@ -41,7 +41,15 @@ class YouTubeIt
 
     class CommentSearch < FeedSearch
       # *Array*:: Array of YouTubeIt::Model::Comment records
-      attr_reader :comments
+      attr_reader :comments, :next_url
+      def next_params
+        if next_url
+          result = {}
+          params = Rack::Utils.parse_query URI(next_url).query if next_url
+          params.each{|k,v| result[k] = CGI.escape(v)}
+          result
+        end
+      end
     end
   end
 end
