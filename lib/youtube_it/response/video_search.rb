@@ -46,7 +46,13 @@ class YouTubeIt
         if next_url
           result = {}
           params = Rack::Utils.parse_query URI(next_url).query if next_url
-          params.each{|k,v| result[k] = CGI.escape(v)}
+          params.each do|k,v|
+            if v.class  == Array
+              result[k] = CGI.escape(v[0])
+            else
+              result[k] = CGI.escape(v)
+            end
+          end
           result
         end
       end
