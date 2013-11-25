@@ -47,7 +47,7 @@ class YouTubeIt
           updated_at         = Time.parse(feed.at("updated").text)
           total_result_count = feed.at_xpath("openSearch:totalResults").text.to_i
           max_result_count   = feed.at_xpath("openSearch:itemsPerPage").text.to_i
-          next_url           = feed.css("link[rel=next]").first.attributes["href"] if feed.css("link[rel=next]").size > 0
+          next_url           = feed.css("link[rel=next]").first.attributes["href"].text if feed.css("link[rel=next]").size > 0
           feed.css("entry").each do |entry|
             comments << parse_entry(entry)
           end
