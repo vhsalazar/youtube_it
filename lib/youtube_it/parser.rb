@@ -335,7 +335,8 @@ class YouTubeIt
           :videos_watched => entry.at_xpath("yt:statistics")["videoWatchCount"],
           :view_count     => entry.at_xpath("yt:statistics")["viewCount"],
           :upload_views   => entry.at_xpath("yt:statistics")["totalUploadViews"],
-          :insight_uri    => (entry.at_xpath('xmlns:link[@rel="http://gdata.youtube.com/schemas/2007#insight.views"]')['href'] rescue nil)
+          :insight_uri    => (entry.at_xpath('xmlns:link[@rel="http://gdata.youtube.com/schemas/2007#insight.views"]')['href'] rescue nil),
+          :channel_uri    => (entry.at_xpath('xmlns:link[@rel="alternate"]')['href'] rescue nil),
         )
       end
     end
@@ -375,7 +376,8 @@ class YouTubeIt
         YouTubeIt::Model::Subscription.new(
           :title        => entry.at("title").text,
           :id           => entry.at("id").text[/subscription([^<]+)/, 1].sub(':',''),
-          :published    => entry.at("published") ? entry.at("published").text : nil
+          :published    => entry.at("published") ? entry.at("published").text : nil,
+          :youtube_user_name  => entry.to_s.split(/\<|\>/)[-4]
         )
       end
     end
@@ -590,7 +592,7 @@ class YouTubeIt
 
       def parse_media_content (elem)
         content_url = elem["url"]
-        format_code = elem["format"].to_i
+        format_code = elem["yt:format"].to_i
         format = YouTubeIt::Model::Video::Format.by_code(format_code)
         duration = elem["duration"].to_i
         mime_type = elem["type"]
